@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as readline from "readline";
 import { default_config } from "./default";
 import {
