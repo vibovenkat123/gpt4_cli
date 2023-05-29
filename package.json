@@ -1,6 +1,6 @@
 {
   "name": "gpt4_cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A way to use chatgpt (but for gpt4) in the terminal",
   "type": "module",
   "main": "dist/main.js",
