@@ -23,8 +23,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const readline = __importStar(require("readline"));
+const examples_1 = __importDefault(require("./examples"));
 const default_1 = require("./default");
 const openai_1 = require("openai");
 const messages = [];
@@ -41,21 +45,27 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
+let input = { role: "user", content: "" };
+messages.push({
+    "role": "system",
+    "content": "You are a helpful assistant.",
+});
 async function main() {
-    let input = { role: "user", content: "" };
-    messages.push({
-        "role": "system",
-        "content": "You are a helpful assistant.",
-    });
     rl.question(`> `, async (inp) => {
-        input = { role: "user", content: inp };
-        messages.push(input);
+        inp = examples_1.default.get(inp) || inp;
         if (inp.toLowerCase() === "exit") {
             rl.close();
             process.exit(0);
         }
-        else {
-            console.log(`User: ${inp}`);
+        else if (inp.toLowerCase() === "submit" || inp.toLowerCase() === "regenerate") {
+            if (inp.toLowerCase() === "submit") {
+                messages.push(Object.assign({}, input));
+            }
+            else {
+                messages.pop();
+                input = messages.at(-1);
+            }
+            console.log(`User: ${input.content}`);
             try {
                 const req = {
                     model: "gpt-4",
@@ -63,8 +73,12 @@ async function main() {
                     temperature: isNaN(temperature) ? default_1.default_config.temp : temperature,
                     max_tokens: isNaN(max_tokens) ? default_1.default_config.tokens : max_tokens,
                     top_p: isNaN(top_p) ? default_1.default_config.top_p : top_p,
-                    frequency_penalty: isNaN(frequency_penalty) ? default_1.default_config.freq_pen : frequency_penalty,
-                    presence_penalty: isNaN(presence_penalty) ? default_1.default_config.pres_pen : presence_penalty,
+                    frequency_penalty: isNaN(frequency_penalty)
+                        ? default_1.default_config.freq_pen
+                        : frequency_penalty,
+                    presence_penalty: isNaN(presence_penalty)
+                        ? default_1.default_config.pres_pen
+                        : presence_penalty,
                 };
                 const res = await openai.createChatCompletion(req);
                 const msg = res.data.choices[0].message;
@@ -83,6 +97,11 @@ async function main() {
                 }
                 process.exit(1);
             }
+            input.content = "";
+            main();
+        }
+        else {
+            input.content += `${inp}\n`;
             main();
         }
     });
