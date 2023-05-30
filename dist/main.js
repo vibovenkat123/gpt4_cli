@@ -28,15 +28,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const readline = __importStar(require("readline"));
+const config_1 = __importDefault(require("./config"));
 const examples_1 = __importDefault(require("./examples"));
-const default_1 = require("./default");
 const openai_1 = require("openai");
 const messages = [];
-const max_tokens = parseInt(process.env.GPT4_CLI_MAX_TOKENS || default_1.default_config.tokens.toString());
-const top_p = parseInt(process.env.GPT4_CLI_TOP_P || default_1.default_config.top_p.toString());
-const temperature = parseInt(process.env.GPT4_CLI_TEMP || default_1.default_config.temp.toString());
-const frequency_penalty = parseInt(process.env.GPT4_CLI_FREQ_PEN || default_1.default_config.freq_pen.toString());
-const presence_penalty = parseInt(process.env.GPT4_CLI_PRES_PEN || default_1.default_config.pres_pen.toString());
 const conf = new openai_1.Configuration({
     apiKey: process.env.OPENAI_API_KEY,
 });
@@ -65,28 +60,48 @@ async function main() {
                 messages.pop();
                 input = messages.at(-1);
             }
-            console.log(`User: ${input.content}`);
+            console.log(`User: 
+${input.content}
+`);
             try {
-                const req = {
-                    model: "gpt-4",
-                    messages,
-                    temperature: isNaN(temperature) ? default_1.default_config.temp : temperature,
-                    max_tokens: isNaN(max_tokens) ? default_1.default_config.tokens : max_tokens,
-                    top_p: isNaN(top_p) ? default_1.default_config.top_p : top_p,
-                    frequency_penalty: isNaN(frequency_penalty)
-                        ? default_1.default_config.freq_pen
-                        : frequency_penalty,
-                    presence_penalty: isNaN(presence_penalty)
-                        ? default_1.default_config.pres_pen
-                        : presence_penalty,
-                };
-                const res = await openai.createChatCompletion(req);
-                const msg = res.data.choices[0].message;
-                if (msg) {
-                    const content = msg.content;
-                    console.log(`GPT: ${content}`);
-                    messages.push({ role: "assistant", content: content });
-                }
+                let gpt_res = [];
+                const { req } = (0, config_1.default)(messages);
+                const res = await openai.createChatCompletion(req, {
+                    responseType: "stream",
+                });
+                const stream = res.data;
+                process.stdout.write("GPT:\n");
+                stream.on("data", (chunk) => {
+                    var _a;
+                    const payloads = chunk.toString().split("\n\n");
+                    for (const payload of payloads) {
+                        if (payload.includes("[DONE]"))
+                            return;
+                        if (payload.startsWith("data:")) {
+                            const data = JSON.parse(payload.replace("data: ", ""));
+                            try {
+                                const chunk = (_a = data.choices[0].delta) === null || _a === void 0 ? void 0 : _a.content;
+                                if (chunk) {
+                                    process.stdout.write(`${chunk}`);
+                                    gpt_res.push(chunk);
+                                }
+                            }
+                            catch (error) {
+                                console.log(`Error with JSON.parse and ${payload}.\n${error}`);
+                                process.exit(1);
+                            }
+                        }
+                    }
+                });
+                stream.on("end", () => {
+                    const finalResponse = gpt_res.join("");
+                    process.stdout.write("\n");
+                    messages.push({ role: "assistant", content: finalResponse });
+                    main();
+                });
+                stream.on("error", (err) => {
+                    throw err;
+                });
             }
             catch (e) {
                 if (e.response.data) {
@@ -98,7 +113,6 @@ async function main() {
                 process.exit(1);
             }
             input.content = "";
-            main();
         }
         else {
             input.content += `${inp}\n`;
